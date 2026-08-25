@@ -33,6 +33,39 @@ def utcnow() -> datetime:
 JSONType = JSON().with_variant(JSONB(), "postgresql")
 
 
+def _enum_values(enum_cls: type) -> list[str]:
+    """Persist Enum.value (email) instead of Enum.name (EMAIL) for Postgres."""
+    return [member.value for member in enum_cls]
+
+
+def channel_enum(*, create_constraint: bool = True) -> Enum:
+    return Enum(
+        Channel,
+        name="channel_enum",
+        native_enum=False,
+        create_constraint=create_constraint,
+        values_callable=_enum_values,
+    )
+
+
+def status_enum() -> Enum:
+    return Enum(
+        NotificationStatus,
+        name="notification_status_enum",
+        native_enum=False,
+        values_callable=_enum_values,
+    )
+
+
+def priority_enum() -> Enum:
+    return Enum(
+        Priority,
+        name="priority_enum",
+        native_enum=False,
+        values_callable=_enum_values,
+    )
+
+
 class UserModel(Base):
     __tablename__ = "users"
 
@@ -54,9 +87,7 @@ class UserPreferenceModel(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    channel: Mapped[Channel] = mapped_column(
-        Enum(Channel, name="channel_enum", native_enum=False), nullable=False
-    )
+    channel: Mapped[Channel] = mapped_column(channel_enum(), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -88,16 +119,14 @@ class NotificationModel(Base):
     template_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("notification_templates.id", ondelete="SET NULL"), nullable=True
     )
-    channel: Mapped[Channel] = mapped_column(
-        Enum(Channel, name="channel_enum", native_enum=False, create_constraint=False), nullable=False
-    )
+    channel: Mapped[Channel] = mapped_column(channel_enum(create_constraint=False), nullable=False)
     status: Mapped[NotificationStatus] = mapped_column(
-        Enum(NotificationStatus, name="notification_status_enum", native_enum=False),
+        status_enum(),
         default=NotificationStatus.PENDING,
         nullable=False,
     )
     priority: Mapped[Priority] = mapped_column(
-        Enum(Priority, name="priority_enum", native_enum=False),
+        priority_enum(),
         default=Priority.NORMAL,
         nullable=False,
     )
@@ -131,9 +160,7 @@ class NotificationDeliveryLogModel(Base):
     notification_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False
     )
-    channel: Mapped[Channel] = mapped_column(
-        Enum(Channel, name="channel_enum", native_enum=False, create_constraint=False), nullable=False
-    )
+    channel: Mapped[Channel] = mapped_column(channel_enum(create_constraint=False), nullable=False)
     status: Mapped[str] = mapped_column(String(64), nullable=False)
     provider_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -147,8 +174,6 @@ class RateLimitTrackerModel(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False, index=True)
-    channel: Mapped[Channel] = mapped_column(
-        Enum(Channel, name="channel_enum", native_enum=False, create_constraint=False), nullable=False
-    )
+    channel: Mapped[Channel] = mapped_column(channel_enum(create_constraint=False), nullable=False)
     count: Mapped[int] = mapped_column(Integer, default=0)
     window_reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
